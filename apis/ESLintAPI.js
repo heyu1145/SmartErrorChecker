@@ -1,0 +1,99 @@
+class ESLintAPI {
+    constructor() {
+        // Using available ESLint Playground API
+        this.endpoint = 'https://eslint.org/api/playground/validate';
+        this.timeout = 5000;
+    }
+
+    async testConnection() {
+        try {
+            const response = await fetch('https://eslint.org/api/playground/status', {
+                method: 'HEAD',
+                timeout: 3000
+            });
+            return response.ok;
+        } catch (error) {
+            console.log('ESLint API connection test failed');
+            return false;
+        }
+    }
+
+    async lint(code) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+        
+        try {
+            const requestBody = {
+                code: code,
+                rules: {
+                    'no-unused-vars': 'warn',
+                    'no-console': 'warn',
+                    'eqeqeq': 'error',
+                    'semi': 'error'
+                },
+                env: {
+                    browser: true,
+                    es2021: true
+                }
+            };
+            
+            const response = await fetch(this.endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                throw new Error(`ESLint API returned error: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            return this.transformResponse(result);
+            
+        } catch (error) {
+            clearTimeout(timeoutId);
+            if (error.name === 'AbortError') {
+                throw new Error('ESLint API request timeout');
+            }
+            console.warn('ESLint API check failed:', error.message);
+            throw error;
+        }
+    }
+
+    transformResponse(result) {
+        const errors = [];
+        
+        if (result.messages && Array.isArray(result.messages)) {
+            result.messages.forEach(msg => {
+                errors.push({
+                    line: msg.line - 1,
+                    column: msg.column - 1,
+                    message: msg.message,
+                    severity: this.mapSeverity(msg.severity),
+                    source: 'ESLint',
+                    rule: msg.ruleId
+                });
+            });
+        }
+        
+        console.log(`✅ ESLint API returned ${errors.length} issues`);
+        return errors;
+    }
+
+    mapSeverity(severity) {
+        const map = { 2: 'error', 1: 'warning', 0: 'info' };
+        return map[severity] || 'warning';
+    }
+}
+
+// Ensure proper export
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = ESLintAPI;
+}
+
+export default ESLintAPI;

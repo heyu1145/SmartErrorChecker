@@ -1,0 +1,40 @@
+{
+  "author": {
+    "email": "heyu12366@outlook.com",
+    "github": "heyu1145",
+    "name": "heyu1145",
+    "url": ""
+  },
+  "changelogs": "changelogs.md",
+  "description": "智能多语言错误检查器 - 支 持 JavaScript、TypeScript、Python、HTML、CSS、JSON 等多种语言的实时错误检测和代码质量检 查",
+  "files": [
+    "apis/ESLintAPI.js",
+    "apis/TypeScriptAPI.js",
+    "apis/PythonAPI.js",
+    "core/APIManager.js",
+    "core/ErrorChecker.js",
+    "core/LocalLinter.js",
+    "ui/OfficialSettings.js",
+    "ui/SettingsPanel.js",
+    "ui/StatusBar.js",
+    "ui/Annotations.js",
+    "utils/ConfigManager.js",
+    "utils/ErrorFilter.js",
+    "utils/FileTypeDetector.js",
+    "changelogs.md"
+  ],
+  "icon": "icon.png",
+  "id": "com.smarterrorchecker.smarterrorchecker",
+  "keywords": [
+    "Lint",
+    "Linter"
+  ],
+  "license": "MIT",
+  "main": "main.js",
+  "minVersionCode": 290,
+  "name": "SmartErrorChecker",
+  "price": 0,
+  "readme": "readme.md",
+  "repository": "https://github.com/heyu1145/SmartErrorChecker",
+  "version": "1.0.0"
+}

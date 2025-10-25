@@ -1,0 +1,45 @@
+class ConfigManager {
+    constructor() {
+        this.defaultConfig = {
+            enabled: true,
+            realtimeChecking: true,
+            useAPI: true,
+            severityLevel: 'warning',
+            showAnnotations: true,
+            showGutterMarkers: true,
+            fallbackToLocal: true,
+            timeout: 5000,
+            checkDelay: 1500,
+            apiEndpoints: {
+                javascript: 'https://eslint.org/api/playground/validate',
+                typescript: 'https://typescript-compiler.vercel.app/api/check',
+                python: 'https://api.pyright.com/check'
+            }
+        };
+    }
+    
+    getSettings() {
+        try {
+            const saved = localStorage.getItem('acode_smart_error_checker_settings');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return { ...this.defaultConfig, ...parsed };
+            }
+        } catch (e) {
+            console.warn('加载设置失败，使用默认设置');
+        }
+        return { ...this.defaultConfig };
+    }
+    
+    saveSettings(settings) {
+        try {
+            localStorage.setItem('acode_smart_error_checker_settings', JSON.stringify(settings));
+        } catch (e) {
+            console.error('保存设置失败:', e);
+        }
+    }
+}
+
+if (typeof window != 'undefined') {
+    window.ConfigManager = ConfigManager;
+}

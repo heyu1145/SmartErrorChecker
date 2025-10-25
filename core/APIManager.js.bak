@@ -1,0 +1,39 @@
+class APIManager {
+    constructor() {
+        this.apis = {
+            javascript: new ESLintAPI(),
+            typescript: new TypeScriptAPI(),
+            python: new PythonAPI()
+        };
+        this.apiStatus = {};
+    }
+    
+    async testConnections() {
+        console.log('🔍 Testing API connections...');
+        
+        for (const [lang, api] of Object.entries(this.apis)) {
+            try {
+                this.apiStatus[lang] = await api.testConnection();
+                console.log(`✅ ${lang} API: ${this.apiStatus[lang] ? 'Available' : 'Unavailable'}`);
+            } catch (error) {
+                this.apiStatus[lang] = false;
+                console.log(`❌ ${lang} API: Connection failed`);
+            }
+        }
+    }
+    
+    isAvailable(fileType) {
+        return this.apiStatus[fileType] !== false;
+    }
+    
+    async lintWithAPI(code, fileType) {
+        const api = this.apis[fileType];
+        if (!api) {
+            throw new Error(`Unsupported file type: ${fileType}`);
+        }
+        
+        return await api.lint(code);
+    }
+}
+
+export default APIManager;

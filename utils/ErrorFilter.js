@@ -1,0 +1,73 @@
+class ErrorFilter {
+    filter(errors, severityLevel) {
+        const severityOrder = { 
+            error: 3, 
+            warning: 2, 
+            info: 1 
+        };
+        
+        const currentLevel = severityOrder[severityLevel] || 2;
+        
+        return errors.filter(error => {
+            const errorLevel = severityOrder[error.severity] || 1;
+            return errorLevel >= currentLevel;
+        });
+    }
+
+    groupBySeverity(errors) {
+        return errors.reduce((groups, error) => {
+            const severity = error.severity || 'unknown';
+            if (!groups[severity]) {
+                groups[severity] = [];
+            }
+            groups[severity].push(error);
+            return groups;
+        }, {});
+    }
+
+    sortByLocation(errors) {
+        return errors.sort((a, b) => {
+            if (a.line !== b.line) {
+                return a.line - b.line;
+            }
+            return (a.column || 0) - (b.column || 0);
+        });
+    }
+
+    getStatistics(errors) {
+        const stats = {
+            total: errors.length,
+            error: 0,
+            warning: 0,
+            info: 0,
+            unknown: 0
+        };
+        
+        errors.forEach(error => {
+            const severity = error.severity || 'unknown';
+            if (stats.hasOwnProperty(severity)) {
+                stats[severity]++;
+            }
+        });
+        
+        return stats;
+    }
+
+    filterBySource(errors, source) {
+        return errors.filter(error => error.source === source);
+    }
+
+    getUniqueMessages(errors) {
+        const seen = new Set();
+        return errors.filter(error => {
+            const key = `${error.message}-${error.line}-${error.column}`;
+            if (seen.has(key)) {
+                return false;
+            }
+            seen.add(key);
+            return true;
+        });
+    }
+}
+
+export default ErrorFilter;

@@ -1,0 +1,187 @@
+class LocalLinter {
+    async lint(code, fileType) {
+        return new Promise((resolve) => {
+            const timeoutId = setTimeout(() => {
+                console.warn('Local check timeout');
+                resolve([]);
+            }, 10000); // 10 second timeout
+
+            try {
+                const errors = this.basicLint(code, fileType);
+                clearTimeout(timeoutId);
+                console.log(`💻 Local check returned ${errors.length} issues`);
+                resolve(errors);
+            } catch (error) {
+                console.error('Local check error:', error);
+                clearTimeout(timeoutId);
+                resolve([]);
+            }
+        });
+    }
+    
+    basicLint(code, fileType) {
+        const errors = [];
+        const lines = code.split('\n');
+        
+        let braceStack = [];
+        let parenStack = [];
+        let bracketStack = [];
+        
+        lines.forEach((line, lineNumber) => {
+            // Simplified bracket matching check
+            this.checkBrackets(line, lineNumber, braceStack, parenStack, bracketStack, errors);
+            
+            // Language-specific checks
+            this.performLanguageChecks(line, lineNumber, fileType, errors);
+        });
+        
+        // Check for unclosed brackets
+        this.checkUnclosedBrackets(braceStack, parenStack, bracketStack, errors);
+        
+        return errors;
+    }
+    
+    checkBrackets(line, lineNumber, braceStack, parenStack, bracketStack, errors) {
+        for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            
+            switch(char) {
+                case '(': 
+                    parenStack.push({ line: lineNumber, column: i });
+                    break;
+                case ')': 
+                    if (parenStack.length > 0) parenStack.pop();
+                    else errors.push({
+                        line: lineNumber,
+                        column: i,
+                        message: 'Extra closing parenthesis',
+                        severity: 'error',
+                        source: 'Local Checker'
+                    });
+                    break;
+                case '{': 
+                    braceStack.push({ line: lineNumber, column: i });
+                    break;
+                case '}': 
+                    if (braceStack.length > 0) braceStack.pop();
+                    else errors.push({
+                        line: lineNumber,
+                        column: i,
+                        message: 'Extra closing brace',
+                        severity: 'error',
+                        source: 'Local Checker'
+                    });
+                    break;
+                case '[': 
+                    bracketStack.push({ line: lineNumber, column: i });
+                    break;
+                case ']': 
+                    if (bracketStack.length > 0) bracketStack.pop();
+                    else errors.push({
+                        line: lineNumber,
+                        column: i,
+                        message: 'Extra closing bracket',
+                        severity: 'error',
+                        source: 'Local Checker'
+                    });
+                    break;
+            }
+        }
+    }
+    
+    checkUnclosedBrackets(braceStack, parenStack, bracketStack, errors) {
+        braceStack.forEach(({ line, column }) => {
+            errors.push({
+                line: line,
+                column: column,
+                message: 'Unclosed brace',
+                severity: 'error',
+                source: 'Local Checker'
+            });
+        });
+        
+        parenStack.forEach(({ line, column }) => {
+            errors.push({
+                line: line,
+                column: column,
+                message: 'Unclosed parenthesis',
+                severity: 'error',
+                source: 'Local Checker'
+            });
+        });
+        
+        bracketStack.forEach(({ line, column }) => {
+            errors.push({
+                line: line,
+                column: column,
+                message: 'Unclosed bracket',
+                severity: 'error',
+                source: 'Local Checker'
+            });
+        });
+    }
+    
+    performLanguageChecks(line, lineNumber, fileType, errors) {
+        switch(fileType) {
+            case 'javascript':
+            case 'typescript':
+                this.checkJavaScriptSpecific(line, lineNumber, errors);
+                break;
+            case 'python':
+                this.checkPythonSpecific(line, lineNumber, errors);
+                break;
+        }
+    }
+    
+    checkJavaScriptSpecific(line, lineNumber, errors) {
+        // Check for == instead of ===
+        if (line.includes(' == ') && !line.includes(' === ')) {
+            const index = line.indexOf(' == ');
+            errors.push({
+                line: lineNumber,
+                column: index,
+                message: 'Suggest using === instead of ==',
+                severity: 'warning',
+                type: 'style'
+            });
+        }
+        
+        // Check for missing semicolon (simplified)
+        const trimmedLine = line.trim();
+        if (trimmedLine && 
+            !trimmedLine.endsWith(';') && 
+            !trimmedLine.endsWith('{') &&
+            !trimmedLine.endsWith('}') &&
+            !trimmedLine.startsWith('//') &&
+            !trimmedLine.startsWith('/*') &&
+            !trimmedLine.startsWith('*') &&
+            !trimmedLine.includes('function') &&
+            !trimmedLine.includes('if') &&
+            !trimmedLine.includes('for') &&
+            !trimmedLine.includes('while')) {
+            
+            errors.push({
+                line: lineNumber,
+                column: line.length - 1,
+                message: 'Suggest adding semicolon at statement end',
+                severity: 'warning',
+                type: 'style'
+            });
+        }
+    }
+    
+    checkPythonSpecific(line, lineNumber, errors) {
+        // Check for mixed tabs and spaces
+        if (line.includes('    ') && line.includes('\t')) {
+            errors.push({
+                line: lineNumber,
+                column: 0,
+                message: 'Mixed tabs and spaces',
+                severity: 'warning',
+                type: 'style'
+            });
+        }
+    }
+}
+
+export default LocalLinter;

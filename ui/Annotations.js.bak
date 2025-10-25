@@ -1,0 +1,158 @@
+class Annotations {
+    constructor(pluginInstance) {
+        this.plugin = pluginInstance;
+        this.errorMarkers = [];
+        this.currentAnnotations = [];
+    }
+
+    display(errors) {
+        this.clearAll();
+        
+        errors.forEach(error => {
+            this.addErrorMarker(error);
+        });
+        
+        this.showErrorsInConsole(errors);
+    }
+
+    addErrorMarker(error) {
+        if (!editorManager || !editorManager.editor) return;
+        
+        const session = editorManager.editor.session;
+        const line = error.line;
+        const column = error.column || 0;
+        
+        try {
+            // Add gutter decoration
+            if (this.plugin.settings.showGutterMarkers) {
+                const gutterClass = `ace_${error.severity}-line`;
+                if (session.addGutterDecoration) {
+                    session.addGutterDecoration(line, gutterClass);
+                }
+            }
+            
+            // Add text marker
+            if (this.plugin.settings.showAnnotations) {
+                const Range = ace.require('ace/range').Range;
+                const range = new Range(line, Math.max(0, column), line, Math.max(0, column + 1));
+                const markerClass = `ace_${error.severity}-marker`;
+                
+                try {
+                    const markerId = session.addMarker(range, markerClass, 'text', true);
+                    this.errorMarkers.push(markerId);
+                } catch (e) {
+                    console.warn('Failed to add text marker:', e);
+                }
+            }
+            
+            // Add annotation
+            this.addAnnotation(error);
+            
+        } catch (error) {
+            console.warn('Failed to add error marker:', error);
+        }
+    }
+
+    addAnnotation(error) {
+        if (!editorManager?.editor?.session?.getAnnotations) return;
+        
+        try {
+            const session = editorManager.editor.session;
+            const annotations = session.getAnnotations() || [];
+            const sourceText = error.source ? ` [${error.source}]` : '';
+            const ruleText = error.rule ? ` (${error.rule})` : '';
+            
+            const newAnnotation = {
+                row: error.line,
+                column: Math.max(0, error.column),
+                text: `${this.getSeverityIcon(error.severity)} ${error.message}${sourceText}${ruleText}`,
+                type: this.getAnnotationType(error.severity)
+            };
+            
+            annotations.push(newAnnotation);
+            session.setAnnotations(annotations);
+            this.currentAnnotations = annotations;
+            
+        } catch (e) {
+            console.warn('Failed to add annotation:', e);
+        }
+    }
+
+    getSeverityIcon(severity) {
+        const icons = {
+            'error': '❌',
+            'warning': '⚠️',
+            'info': 'ℹ️'
+        };
+        return icons[severity] || '📝';
+    }
+
+    getAnnotationType(severity) {
+        const types = {
+            'error': 'error',
+            'warning': 'warning',
+            'info': 'info'
+        };
+        return types[severity] || 'error';
+    }
+
+    clearAll() {
+        if (!editorManager || !editorManager.editor) return;
+        
+        const session = editorManager.editor.session;
+        
+        try {
+            // Clear gutter decorations
+            if (session.removeGutterDecoration) {
+                for (let i = 0; i < session.getLength(); i++) {
+                    session.removeGutterDecoration(i, 'ace_error-line');
+                    session.removeGutterDecoration(i, 'ace_warning-line');
+                    session.removeGutterDecoration(i, 'ace_info-line');
+                }
+            }
+            
+            // Clear text markers
+            this.errorMarkers.forEach(markerId => {
+                try {
+                    session.removeMarker(markerId);
+                } catch (e) {
+                    console.warn('Failed to clear marker:', e);
+                }
+            });
+            this.errorMarkers = [];
+            
+            // Clear annotations
+            if (session.setAnnotations) {
+                session.setAnnotations([]);
+            }
+            this.currentAnnotations = [];
+            
+        } catch (error) {
+            console.warn('Error clearing markers:', error);
+        }
+    }
+
+    showErrorsInConsole(errors) {
+        if (errors.length > 0) {
+            console.group('🔍 SmartErrorChecker Results');
+            errors.forEach(error => {
+                const icon = this.getSeverityIcon(error.severity);
+                const location = `Line ${error.line + 1}, Column ${error.column + 1}`;
+                console.log(`${icon} ${location}: ${error.message}`);
+                if (error.source) {
+                    console.log(`   Source: ${error.source}`);
+                }
+                if (error.rule) {
+                    console.log(`   Rule: ${error.rule}`);
+                }
+            });
+            console.groupEnd();
+        }
+    }
+
+    destroy() {
+        this.clearAll();
+    }
+}
+
+export default Annotations;

@@ -1,0 +1,88 @@
+class StatusBar {
+    constructor(element) {
+        this.element = element;
+    }
+    
+    create() {
+        this.destroy(); // Clean existing
+        
+        this.element = document.createElement('div');
+        this.element.className = 'smart-error-checker-status';
+        this.element.innerHTML = '🔍 Checker Ready';
+        this.element.onclick = () => this.showQuickActions();
+        document.body.appendChild(this.element);
+    }
+    
+    update({ errors = [], checking = false, fileType = '', message = '' }) {
+        if (!this.element) return;
+        
+        if (message) {
+            this.element.innerHTML = message;
+            return;
+        }
+        
+        if (checking) {
+            const mode = window.smartErrorChecker?.settings.useAPI ? '🌐' : '💻';
+            this.element.innerHTML = `${mode} Checking...`;
+            this.element.style.background = '#3498db';
+            return;
+        }
+        
+        const errorCount = errors.filter(e => e.severity === 'error').length;
+        const warningCount = errors.filter(e => e.severity === 'warning').length;
+        const infoCount = errors.filter(e => e.severity === 'info').length;
+        
+        const mode = window.smartErrorChecker?.settings.useAPI ? '🌐' : '💻';
+        
+        if (errorCount > 0) {
+            this.element.innerHTML = `${mode} ❌${errorCount} ⚠️${warningCount} ℹ️${infoCount}`;
+            this.element.style.background = '#e74c3c';
+        } else if (warningCount > 0) {
+            this.element.innerHTML = `${mode} ⚠️${warningCount} ℹ️${infoCount}`;
+            this.element.style.background = '#f39c12';
+        } else if (infoCount > 0) {
+            this.element.innerHTML = `${mode} ℹ️${infoCount}`;
+            this.element.style.background = '#3498db';
+        } else {
+            this.element.innerHTML = `${mode} ✅ Code Clean`;
+            this.element.style.background = '#27ae60';
+        }
+    }
+    
+    showQuickActions() {
+        if (!window.smartErrorChecker) return;
+        
+        const actions = [
+            '1. Re-check code',
+            '2. ' + (window.smartErrorChecker.settings.enabled ? 'Disable checker' : 'Enable checker'),
+            '3. ' + (window.smartErrorChecker.settings.useAPI ? 'Switch to local mode' : 'Switch to API mode'),
+            '4. Test API connection',
+            '5. Clear all markers'
+        ].join('\n');
+        
+        const choice = prompt(`🔧 SmartErrorChecker\n\n${actions}\n\nSelect action:`, '1');
+        
+        switch(choice) {
+            case '1': window.smartErrorChecker.checkWithSmartService(); break;
+            case '2': window.smartErrorChecker.toggleEnabled(); break;
+            case '3': window.smartErrorChecker.toggleAPIMode(); break;
+            case '4': window.smartErrorChecker.apiManager.testConnections(); break;
+            case '5': window.smartErrorChecker.annotations.clearAll(); break;
+        }
+    }
+    
+    updateVisibility(enabled) {
+        if (this.element) {
+            this.element.style.display = enabled ? 'block' : 'none';
+        }
+    }
+    
+    destroy() {
+        if (this.element) {
+            this.element.remove();
+            this.element = null;
+        }
+    }
+}
+
+export default StatusBar;

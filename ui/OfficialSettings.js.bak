@@ -1,0 +1,170 @@
+class OfficialSettings {
+    constructor(pluginInstance) {
+        this.plugin = pluginInstance;
+        this.settings = null;
+    }
+
+    // 注册官方设置
+    register() {
+        if (typeof acode !== 'undefined' && acode.definePluginOptions) {
+            acode.definePluginOptions('com.smarterrorchecker.smarterrorchecker', {
+                data: this.getSettingsSchema(),
+                onsave: (data) => this.onSettingsSave(data)
+            });
+            console.log('✅ 官方设置已注册');
+        } else {
+            console.warn('⚠️ 官方设置API不可用，使用备用设置面板');
+        }
+    }
+
+    // 获取设置架构
+    getSettingsSchema() {
+        return [
+            {
+                key: 'enabled',
+                type: 'checkbox',
+                title: '启用智能错误检查',
+                description: '启用或禁用整个错误检查功能',
+                value: this.plugin.settings.enabled
+            },
+            {
+                key: 'realtimeChecking',
+                type: 'checkbox',
+                title: '实时检查',
+                description: '在输入时自动检查代码错误',
+                value: this.plugin.settings.realtimeChecking
+            },
+            {
+                key: 'useAPI',
+                type: 'checkbox',
+                title: '使用API检查',
+                description: '使用在线API进行更准确的代码检查',
+                value: this.plugin.settings.useAPI
+            },
+            {
+                key: 'fallbackToLocal',
+                type: 'checkbox',
+                title: 'API失败时回退到本地检查',
+                description: '当API不可用时自动使用本地检查器',
+                value: this.plugin.settings.fallbackToLocal
+            },
+            {
+                type: 'section',
+                title: '显示设置'
+            },
+            {
+                key: 'showAnnotations',
+                type: 'checkbox',
+                title: '显示代码注解',
+                description: '在代码旁边显示错误和警告信息',
+                value: this.plugin.settings.showAnnotations
+            },
+            {
+                key: 'showGutterMarkers',
+                type: 'checkbox',
+                title: '显示行号标记',
+                description: '在行号区域显示错误和警告图标',
+                value: this.plugin.settings.showGutterMarkers
+            },
+            {
+                key: 'severityLevel',
+                type: 'select',
+                title: '显示级别',
+                description: '控制显示的错误严重程度',
+                value: this.plugin.settings.severityLevel,
+                options: [
+                    { value: 'error', text: '仅错误' },
+                    { value: 'warning', text: '错误和警告' },
+                    { value: 'info', text: '全部信息' }
+                ]
+            },
+            {
+                type: 'section',
+                title: '高级设置'
+            },
+            {
+                key: 'timeout',
+                type: 'number',
+                title: 'API超时时间(毫秒)',
+                description: 'API请求的超时时间',
+                value: this.plugin.settings.timeout,
+                min: 1000,
+                max: 30000
+            },
+            {
+                key: 'checkDelay',
+                type: 'number',
+                title: '检查延迟(毫秒)',
+                description: '输入后开始检查的延迟时间',
+                value: this.plugin.settings.checkDelay || 1500,
+                min: 500,
+                max: 5000
+            },
+            {
+                type: 'section',
+                title: 'API设置'
+            },
+            {
+                key: 'customEndpoints',
+                type: 'object',
+                title: '自定义API端点',
+                description: '为不同语言设置自定义API端点',
+                value: this.plugin.settings.customEndpoints || {},
+                properties: {
+                    javascript: {
+                        type: 'string',
+                        title: 'JavaScript API',
+                        value: this.plugin.settings.apiEndpoints?.javascript || ''
+                    },
+                    typescript: {
+                        type: 'string',
+                        title: 'TypeScript API',
+                        value: this.plugin.settings.apiEndpoints?.typescript || ''
+                    },
+                    python: {
+                        type: 'string',
+                        title: 'Python API',
+                        value: this.plugin.settings.apiEndpoints?.python || ''
+                    }
+                }
+            }
+        ];
+    }
+
+    // 设置保存回调
+    onSettingsSave(data) {
+        console.log('💾 保存设置:', data);
+        
+        // 更新插件设置
+        this.plugin.settings = {
+            ...this.plugin.settings,
+            ...data
+        };
+
+        // 保存到本地存储
+        this.plugin.configManager.saveSettings(this.plugin.settings);
+
+        // 应用新设置
+        this.plugin.applySettings();
+
+        this.plugin.showNotification('设置已保存并应用');
+    }
+
+    // 打开官方设置面板
+    open() {
+        if (typeof acode !== 'undefined' && acode.exec) {
+            acode.exec('openSettings', 'com.smarterrorchecker.smarterrorchecker');
+        } else {
+            this.plugin.settingsPanel.show();
+        }
+    }
+
+    // 检查是否支持官方设置
+    isSupported() {
+        return typeof acode !== 'undefined' && acode.definePluginOptions;
+    }
+}
+
+if (typeof window != 'undefined') {
+    window.OfficialSettings = OfficialSettings;
+}

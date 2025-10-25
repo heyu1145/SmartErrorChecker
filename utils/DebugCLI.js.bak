@@ -1,0 +1,701 @@
+class DebugCLI {
+    constructor(pluginInstance) {
+        this.plugin = pluginInstance;
+        this.commands = new Map();
+        this.lastCheckResult = null;
+        this.commandHistory = [];
+        this.maxHistorySize = 50;
+        
+        this.setupCommands();
+        console.log('✅ DebugCLI 初始化完成');
+    }
+
+    setupCommands() {
+        // 基础信息命令
+        this.commands.set('info', {
+            description: '显示插件信息',
+            execute: () => this.showInfo()
+        });
+
+        this.commands.set('status', {
+            description: '显示当前状态',
+            execute: () => this.showStatus()
+        });
+
+        this.commands.set('version', {
+            description: '显示版本信息',
+            execute: () => this.showVersion()
+        });
+
+        // 检查相关命令
+        this.commands.set('check', {
+            description: '立即执行代码检查',
+            execute: () => this.forceCheck()
+        });
+
+        this.commands.set('analyze', {
+            description: '分析当前文件的代码问题',
+            execute: () => this.analyzeCurrentFile()
+        });
+
+        this.commands.set('test', {
+            description: '运行测试用例',
+            execute: () => this.runTestCases()
+        });
+
+        // 错误信息命令
+        this.commands.set('errors', {
+            description: '显示最后一次检查的错误详情',
+            execute: () => this.showLastErrors()
+        });
+
+        this.commands.set('stats', {
+            description: '显示详细的错误统计',
+            execute: () => this.showDetailedStats()
+        });
+
+        this.commands.set('export', {
+            description: '导出错误报告',
+            execute: (args) => this.exportReport(args[0] || 'console')
+        });
+
+        // 设置相关命令
+        this.commands.set('settings', {
+            description: '显示当前设置',
+            execute: () => this.showSettings()
+        });
+
+        this.commands.set('config', {
+            description: '显示配置详情',
+            execute: () => this.showConfig()
+        });
+
+        this.commands.set('toggle', {
+            description: '切换启用状态',
+            execute: () => this.toggleEnabled()
+        });
+
+        this.commands.set('mode', {
+            description: '切换检查模式',
+            execute: () => this.toggleMode()
+        });
+
+        // 调试命令
+        this.commands.set('debug', {
+            description: '显示调试信息',
+            execute: () => this.showDebugInfo()
+        });
+
+        this.commands.set('env', {
+            description: '显示环境信息',
+            execute: () => this.showEnvironment()
+        });
+
+        this.commands.set('api', {
+            description: '测试API连接',
+            execute: () => this.testAPIConnection()
+        });
+
+        this.commands.set('clear', {
+            description: '清除所有标记和日志',
+            execute: () => this.clearAll()
+        });
+
+        this.commands.set('reset', {
+            description: '重置插件状态',
+            execute: () => this.resetPlugin()
+        });
+
+        // 系统命令
+        this.commands.set('history', {
+            description: '显示命令历史',
+            execute: () => this.showHistory()
+        });
+
+        this.commands.set('commands', {
+            description: '列出所有命令',
+            execute: () => this.listCommands()
+        });
+
+        this.commands.set('help', {
+            description: '显示帮助信息',
+            execute: () => this.showHelp()
+        });
+    }
+
+    // 执行命令
+    execute(command, args = []) {
+        // 添加到历史
+        this.addToHistory(command, args);
+        
+        if (!this.commands.has(command)) {
+            const suggestion = this.findSuggestion(command);
+            let response = `❌ 未知命令: ${command}`;
+            if (suggestion) {
+                response += `\n💡 您是不是想执行: "${suggestion}"?`;
+            }
+            response += '\n输入 "help" 查看可用命令';
+            return response;
+        }
+
+        try {
+            console.group(`🔧 CLI 命令: ${command} ${args.join(' ')}`);
+            const result = this.commands.get(command).execute(args);
+            console.groupEnd();
+            return result;
+        } catch (error) {
+            console.error('❌ 命令执行失败:', error);
+            return `❌ 命令执行失败: ${error.message}\n💡 错误详情请查看控制台`;
+        }
+    }
+
+    // 存储检查结果
+    storeCheckResult(errors, fileInfo) {
+        this.lastCheckResult = {
+            errors: errors || [],
+            fileInfo: fileInfo || {},
+            timestamp: new Date(),
+            stats: this.calculateStats(errors)
+        };
+        
+        console.log(`📊 存储检查结果: ${errors.length} 个问题`);
+    }
+
+    // 计算详细统计
+    calculateStats(errors) {
+        const stats = {
+            total: errors.length,
+            error: 0,
+            warning: 0,
+            info: 0,
+            bySource: {},
+            byRule: {},
+            bySeverity: {
+                error: [],
+                warning: [],
+                info: []
+            },
+            byLine: {}
+        };
+
+        errors.forEach(error => {
+            // 按严重程度统计
+            const severity = error.severity || 'info';
+            stats[severity] = (stats[severity] || 0) + 1;
+            
+            // 按来源统计
+            const source = error.source || 'unknown';
+            stats.bySource[source] = (stats.bySource[source] || 0) + 1;
+            
+            // 按规则统计
+            const rule = error.rule || 'unknown';
+            stats.byRule[rule] = (stats.byRule[rule] || 0) + 1;
+            
+            // 按行号统计
+            const line = error.line || 0;
+            if (!stats.byLine[line]) {
+                stats.byLine[line] = [];
+            }
+            stats.byLine[line].push(error);
+            
+            // 按严重程度分组
+            if (stats.bySeverity[severity]) {
+                stats.bySeverity[severity].push(error);
+            }
+        });
+
+        return stats;
+    }
+
+    // 命令实现
+    showInfo() {
+        const settings = this.plugin.settings;
+        const file = editorManager?.activeFile;
+        
+        const info = `
+🔍 SmartErrorChecker 插件信息:
+
+版本: 1.0.0
+状态: ${settings.enabled ? '✅ 启用' : '❌ 禁用'}
+模式: ${settings.useAPI ? '🌐 API模式' : '💻 本地模式'}
+实时检查: ${settings.realtimeChecking ? '✅' : '❌'}
+显示级别: ${settings.severityLevel}
+
+当前文件: ${file?.name || '无'}
+文件类型: ${file ? this.plugin.fileTypeDetector.getFileType(file.name) : '未知'}
+初始化: ${this.plugin.isInitialized ? '✅ 完成' : '🔄 进行中'}
+        `.trim();
+
+        console.log(info);
+        return info;
+    }
+
+    showStatus() {
+        const file = editorManager?.activeFile;
+        const content = editorManager?.editor.getValue() || '';
+        const stats = this.getCurrentStats();
+
+        const status = `
+📊 当前状态:
+
+文件: ${file?.name || '无'}
+类型: ${file ? this.plugin.fileTypeDetector.getFileType(file.name) : '未知'}
+大小: ${content.length} 字符
+行数: ${content.split('\n').length}
+编码: ${this.detectEncoding(content)}
+
+最后检查: ${this.lastCheckResult ? this.lastCheckResult.timestamp.toLocaleTimeString() : '从未检查'}
+问题统计: ${stats.total} 个 (❌${stats.error} ⚠️${stats.warning} ℹ️${stats.info})
+
+API状态: ${this.getAPIStatus()}
+内存使用: ${this.getMemoryUsage()}
+        `.trim();
+
+        console.log(status);
+        return status;
+    }
+
+    showVersion() {
+        const versionInfo = `
+📦 SmartErrorChecker 版本信息:
+
+主版本: 1.0.0
+Acode版本: ${this.getAcodeVersion()}
+构建时间: ${this.getBuildTime()}
+支持语言: ${this.getSupportedLanguages()}
+CLI版本: 1.0.0
+        `.trim();
+
+        console.log(versionInfo);
+        return versionInfo;
+    }
+
+    forceCheck() {
+        if (!this.plugin.settings.enabled) {
+            return '❌ 检查器已禁用，请先启用\n💡 使用: toggle 命令启用';
+        }
+
+        console.group('🔍 手动触发代码检查');
+        this.plugin.checkWithSmartService();
+        console.groupEnd();
+
+        return '✅ 已触发代码检查，请查看状态栏和控制台输出';
+    }
+
+    analyzeCurrentFile() {
+        const file = editorManager?.activeFile;
+        if (!file) {
+            return '❌ 没有活跃文件';
+        }
+
+        const fileType = this.plugin.fileTypeDetector.getFileType(file.name);
+        const content = editorManager.editor.getValue();
+        
+        if (!content.trim()) {
+            return '❌ 文件内容为空';
+        }
+
+        console.group('🔍 深度文件分析');
+        
+        let errors = [];
+        try {
+            // 使用本地检查器进行分析
+            if (this.plugin.localLinter && typeof this.plugin.localLinter.lint === 'function') {
+                errors = this.plugin.localLinter.lint(content, fileType);
+            } else {
+                errors = this.basicLint(content, fileType);
+            }
+        } catch (error) {
+            console.error('分析失败:', error);
+            return `❌ 分析失败: ${error.message}`;
+        }
+
+        // 存储结果
+        this.storeCheckResult(errors, {
+            name: file.name,
+            type: fileType,
+            size: content.length,
+            lines: content.split('\n').length,
+            analysis: 'deep'
+        });
+
+        const stats = this.calculateStats(errors);
+        
+        let result = `📊 深度分析结果:\n\n`;
+        result += `文件: ${file.name}\n`;
+        result += `类型: ${fileType}\n`;
+        result += `大小: ${content.length} 字符\n`;
+        result += `行数: ${content.split('\n').length}\n`;
+        result += `分析时间: ${new Date().toLocaleTimeString()}\n\n`;
+
+        if (stats.total > 0) {
+            result += `📈 问题分析:\n`;
+            result += `   总计: ${stats.total} 个问题\n`;
+            result += `   ❌ 错误: ${stats.error}\n`;
+            result += `   ⚠️ 警告: ${stats.warning}\n`;
+            result += `   ℹ️ 信息: ${stats.info}\n\n`;
+
+            // 问题分布
+            if (Object.keys(stats.bySource).length > 0) {
+                result += `🔧 检查来源:\n`;
+                Object.entries(stats.bySource).forEach(([source, count]) => {
+                    result += `   ${source}: ${count}\n`;
+                });
+                result += '\n';
+            }
+
+            // 最严重的问题
+            const topErrors = [...errors]
+                .sort((a, b) => {
+                    const severityOrder = { error: 3, warning: 2, info: 1 };
+                    return (severityOrder[b.severity] || 1) - (severityOrder[a.severity] || 1);
+                })
+                .slice(0, 3);
+
+            if (topErrors.length > 0) {
+                result += `🎯 最严重的问题:\n`;
+                topErrors.forEach((error, index) => {
+                    const icon = this.getSeverityIcon(error.severity);
+                    result += `   ${index + 1}. ${icon} 第${error.line + 1}行: ${error.message}\n`;
+                });
+            }
+        } else {
+            result += '🎉 代码质量优秀！未发现任何问题。';
+        }
+
+        console.groupEnd();
+        console.log(result);
+        return result;
+    }
+
+    showLastErrors() {
+        if (!this.lastCheckResult) {
+            return '❌ 没有可用的检查结果\n💡 使用: check 或 analyze 命令先执行检查';
+        }
+
+        const { errors, fileInfo, timestamp, stats } = this.lastCheckResult;
+        
+        let result = `📋 检查结果 (${timestamp.toLocaleTimeString()})\n\n`;
+        result += `文件: ${fileInfo.name || '未知'}\n`;
+        result += `类型: ${fileInfo.type || '未知'}\n`;
+        result += `问题总数: ${stats.total}\n\n`;
+
+        if (errors.length === 0) {
+            result += '🎉 没有发现问题！';
+            console.log(result);
+            return result;
+        }
+
+        // 按严重程度和行号排序
+        const sortedErrors = [...errors].sort((a, b) => {
+            const severityOrder = { error: 3, warning: 2, info: 1 };
+            const aOrder = severityOrder[a.severity] || 1;
+            const bOrder = severityOrder[b.severity] || 1;
+            
+            if (aOrder !== bOrder) return bOrder - aOrder;
+            if (a.line !== b.line) return a.line - b.line;
+            return (a.column || 0) - (b.column || 0);
+        });
+
+        // 显示错误详情
+        result += `📝 问题详情:\n\n`;
+        sortedErrors.forEach((error, index) => {
+            const icon = this.getSeverityIcon(error.severity);
+            const location = `第${error.line + 1}行${error.column ? `,第${error.column + 1}列` : ''}`;
+            
+            result += `${icon} ${location}: ${error.message}\n`;
+            
+            if (error.source) {
+                result += `   来源: ${error.source}\n`;
+            }
+            if (error.rule) {
+                result += `   规则: ${error.rule}\n`;
+            }
+            
+            // 显示代码片段
+            const codeSnippet = this.getCodeSnippet(error.line);
+            if (codeSnippet) {
+                result += `   代码: ${codeSnippet}\n`;
+            }
+            
+            if (index < sortedErrors.length - 1) {
+                result += '\n';
+            }
+        });
+
+        console.log(result);
+        return result;
+    }
+
+    showDetailedStats() {
+        if (!this.lastCheckResult) {
+            return '❌ 没有可用的检查结果';
+        }
+
+        const { stats, fileInfo, timestamp } = this.lastCheckResult;
+        
+        let result = `📊 详细统计分析\n\n`;
+        result += `文件: ${fileInfo.name || '未知'}\n`;
+        result += `检查时间: ${timestamp.toLocaleString()}\n`;
+        result += `分析时长: ${Date.now() - timestamp.getTime()}ms\n\n`;
+
+        // 总体统计
+        result += `📈 总体统计:\n`;
+        result += `   总计: ${stats.total} 个问题\n`;
+        result += `   ❌ 错误: ${stats.error} (${this.getPercentage(stats.error, stats.total)})\n`;
+        result += `   ⚠️ 警告: ${stats.warning} (${this.getPercentage(stats.warning, stats.total)})\n`;
+        result += `   ℹ️ 信息: ${stats.info} (${this.getPercentage(stats.info, stats.total)})\n\n`;
+
+        // 按来源统计
+        if (Object.keys(stats.bySource).length > 0) {
+            result += `🔧 检查来源分布:\n`;
+            Object.entries(stats.bySource)
+                .sort((a, b) => b[1] - a[1])
+                .forEach(([source, count]) => {
+                    result += `   ${source.padEnd(15)}: ${count.toString().padEnd(3)} (${this.getPercentage(count, stats.total)})\n`;
+                });
+            result += '\n';
+        }
+
+        // 按规则统计
+        if (Object.keys(stats.byRule).length > 0) {
+            result += `📝 规则统计 (前10):\n`;
+            const sortedRules = Object.entries(stats.byRule)
+                .filter(([rule]) => rule !== 'unknown')
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            
+            sortedRules.forEach(([rule, count]) => {
+                result += `   ${rule.padEnd(20)}: ${count}\n`;
+            });
+            result += '\n';
+        }
+
+        // 按行号统计
+        if (Object.keys(stats.byLine).length > 0) {
+            const problemLines = Object.keys(stats.byLine)
+                .map(line => parseInt(line))
+                .sort((a, b) => b - a)
+                .slice(0, 5);
+
+            if (problemLines.length > 0) {
+                result += `🔍 问题集中行号:\n`;
+                problemLines.forEach(line => {
+                    const lineErrors = stats.byLine[line];
+                    result += `   第${line + 1}行: ${lineErrors.length} 个问题\n`;
+                });
+            }
+        }
+
+        console.log(result);
+        return result;
+    }
+
+    showSettings() {
+        const settings = this.plugin.settings;
+        const settingInfo = `
+⚙️ 当前设置:
+
+🔧 基本设置:
+   启用检查: ${settings.enabled ? '✅' : '❌'}
+   实时检查: ${settings.realtimeChecking ? '✅' : '❌'}
+   使用API: ${settings.useAPI ? '✅' : '❌'}
+   回退本地: ${settings.fallbackToLocal ? '✅' : '❌'}
+
+👁️ 显示设置:
+   显示级别: ${settings.severityLevel}
+   显示注解: ${settings.showAnnotations ? '✅' : '❌'}
+   行号标记: ${settings.showGutterMarkers ? '✅' : '❌'}
+
+⏱️ 性能设置:
+   超时时间: ${settings.timeout}ms
+   检查延迟: ${settings.checkDelay}ms
+        `.trim();
+
+        console.log(settingInfo);
+        return settingInfo;
+    }
+
+    showConfig() {
+        const config = this.plugin.configManager.getSettings();
+        const configInfo = `
+🔧 配置详情:
+
+默认配置: ${JSON.stringify(this.plugin.configManager.defaultConfig, null, 2)}
+当前配置: ${JSON.stringify(config, null, 2)}
+存储状态: ${localStorage.getItem('acode_smart_error_checker_settings') ? '✅ 已保存' : '❌ 未保存'}
+        `.trim();
+
+        console.log(configInfo);
+        return configInfo;
+    }
+
+    // ... 其他命令实现（toggle, mode, debug, env, api, clear, reset, history, commands, help）...
+
+    // 辅助方法
+    getSeverityIcon(severity) {
+        const icons = { error: '❌', warning: '⚠️', info: 'ℹ️' };
+        return icons[severity] || '📝';
+    }
+
+    getCodeSnippet(lineNumber) {
+        try {
+            const content = editorManager?.editor.getValue();
+            if (!content) return null;
+            
+            const lines = content.split('\n');
+            if (lineNumber >= 0 && lineNumber < lines.length) {
+                const snippet = lines[lineNumber].trim();
+                return snippet.length > 50 ? snippet.substring(0, 47) + '...' : snippet;
+            }
+        } catch (error) {
+            // 忽略错误
+        }
+        return null;
+    }
+
+    getPercentage(part, total) {
+        if (total === 0) return '0%';
+        return ((part / total) * 100).toFixed(1) + '%';
+    }
+
+    detectEncoding(content) {
+        // 简单的编码检测
+        if (content.includes('\\u')) return 'Unicode';
+        if (content.match(/[^\x00-\x7F]/)) return 'UTF-8';
+        return 'ASCII';
+    }
+
+    getAPIStatus() {
+        if (!this.plugin.apiManager) return '未知';
+        const status = this.plugin.apiManager.apiStatus;
+        const available = Object.values(status).filter(Boolean).length;
+        const total = Object.keys(status).length;
+        return `${available}/${total} 可用`;
+    }
+
+    getMemoryUsage() {
+        if (typeof process !== 'undefined' && process.memoryUsage) {
+            const usage = process.memoryUsage();
+            return Math.round(usage.heapUsed / 1024 / 1024) + ' MB';
+        }
+        return 'N/A';
+    }
+
+    getAcodeVersion() {
+        return typeof acode !== 'undefined' ? '可用' : '未知';
+    }
+
+    getBuildTime() {
+        return new Date().toLocaleDateString();
+    }
+
+    getSupportedLanguages() {
+        const detector = this.plugin.fileTypeDetector;
+        if (detector && detector.typeMap) {
+            return Object.keys(detector.typeMap).length;
+        }
+        return '未知';
+    }
+
+    addToHistory(command, args) {
+        this.commandHistory.push({
+            command,
+            args,
+            timestamp: new Date()
+        });
+        
+        // 限制历史记录大小
+        if (this.commandHistory.length > this.maxHistorySize) {
+            this.commandHistory.shift();
+        }
+    }
+
+    findSuggestion(input) {
+        const commands = Array.from(this.commands.keys());
+        return commands.find(cmd => 
+            cmd.startsWith(input) || 
+            cmd.includes(input) ||
+            this.levenshteinDistance(cmd, input) <= 2
+        );
+    }
+
+    levenshteinDistance(a, b) {
+        // 简单的字符串相似度计算
+        if (a.length === 0) return b.length;
+        if (b.length === 0) return a.length;
+
+        const matrix = [];
+        for (let i = 0; i <= b.length; i++) {
+            matrix[i] = [i];
+        }
+        for (let j = 0; j <= a.length; j++) {
+            matrix[0][j] = j;
+        }
+
+        for (let i = 1; i <= b.length; i++) {
+            for (let j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1,
+                        matrix[i][j - 1] + 1,
+                        matrix[i - 1][j] + 1
+                    );
+                }
+            }
+        }
+
+        return matrix[b.length][a.length];
+    }
+
+    getCurrentStats() {
+        if (this.lastCheckResult) {
+            return this.lastCheckResult.stats;
+        }
+        return { total: 0, error: 0, warning: 0, info: 0 };
+    }
+
+    basicLint(code, fileType) {
+        // 简化的检查逻辑，用于备用
+        const errors = [];
+        const lines = code.split('\n');
+        
+        lines.forEach((line, lineNumber) => {
+            if (fileType === 'javascript' || fileType === 'typescript') {
+                if (line.includes(' == ') && !line.includes(' === ')) {
+                    errors.push({
+                        line: lineNumber,
+                        column: line.indexOf(' == '),
+                        message: '建议使用 === 而不是 ==',
+                        severity: 'warning',
+                        source: 'Debug Checker',
+                        rule: 'eqeqeq'
+                    });
+                }
+                
+                // 检查未闭合括号
+                const openParen = (line.match(/\(/g) || []).length;
+                const closeParen = (line.match(/\)/g) || []).length;
+                if (openParen > closeParen) {
+                    errors.push({
+                        line: lineNumber,
+                        column: line.lastIndexOf('('),
+                        message: '可能缺少闭合括号',
+                        severity: 'warning',
+                        source: 'Debug Checker',
+                        rule: 'paren-match'
+                    });
+                }
+            }
+        });
+        
+        return errors;
+    }
+}
+
+// 确保类在全局可用
+if (typeof window !== 'undefined') {
+    window.DebugCLI = DebugCLI;
+}
